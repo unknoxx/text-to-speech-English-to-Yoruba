@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>English to Yoruba Speech</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-100 flex items-center justify-center min-h-screen">
+    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
+      <h1 class="text-2xl font-bold text-center mb-4">
+        English to Yoruba Speech
+      </h1>
+      <textarea
+        id="textInput"
+        class="w-full p-2 border rounded-md mb-4"
+        rows="4"
+        placeholder="Enter English text"
+      ></textarea>
+      <button
+        id="speakButton"
+        class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600"
+      >
+        Speak
+      </button>
+      <p id="status" class="text-center text-sm text-gray-600 mt-4"></p>
+    </div>
+
+    <script>
+      const textInput = document.getElementById("textInput");
+      const speakButton = document.getElementById("speakButton");
+      const status = document.getElementById("status");
+
+      async function translateText(text) {
+        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
+          text
+        )}&langpair=en|yo`;
+        try {
+          const response = await fetch(url);
+          const data = await response.json();
+          return data.responseData.translatedText || text;
+        } catch (error) {
+          status.textContent = "Translation failed. Using original text.";
+          console.error(error);
+          return text;
+        }
+      }
+
+      if ("speechSynthesis" in window) {
+        let voices = [];
+        function loadVoices() {
+          voices = speechSynthesis.getVoices();
+          const yorubaVoice = voices.find(
+            (voice) => voice.lang === "yo-NG" || voice.lang === "yo"
+          );
+          status.textContent = yorubaVoice
+            ? `Using voice: ${yorubaVoice.name}`
+            : "No Yoruba voice available. Using default voice.";
+        }
+        speechSynthesis.onvoiceschanged = loadVoices;
+        loadVoices();
+
+        speakButton.addEventListener("click", async () => {
+          const text = textInput.value.trim();
+          if (!text) {
+            status.textContent = "Please enter some text.";
+            return;
+          }
+          status.textContent = "Translating...";
+          const yorubaText = await translateText(text);
+          const utterance = new SpeechSynthesisUtterance(yorubaText);
+          const yorubaVoice = voices.find(
+            (voice) => voice.lang === "yo-NG" || voice.lang === "yo"
+          );
+          if (yorubaVoice) utterance.voice = yorubaVoice;
+          utterance.lang = "yo-NG";
+          speechSynthesis.speak(utterance);
+          status.textContent = "Speaking...";
+        });
+      } else {
+        status.textContent = "Web Speech API not supported in your browser.";
+        speakButton.disabled = true;
+        speakButton.classList.add("bg-gray-400", "cursor-not-allowed");
+      }
+    </script>
+  </body>
+</html>
