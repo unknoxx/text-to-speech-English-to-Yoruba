@@ -5,82 +5,217 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>English to Yoruba Speech</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+      rel="stylesheet"
+    />
+    <style>
+      /* Custom animations for modern feel */
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+        }
+        50% {
+          transform: scale(1.1);
+        }
+        100% {
+          transform: scale(1);
+        }
+      }
+      .pulse-animation {
+        animation: pulse 1.5s infinite;
+      }
+      .card-hover:hover {
+        transform: translateY(-5px);
+        transition: transform 0.3s ease;
+      }
+    </style>
   </head>
-  <body class="bg-gray-100 flex items-center justify-center min-h-screen">
-    <div class="bg-white p-6 rounded-lg shadow-lg w-full max-w-md">
-      <h1 class="text-2xl font-bold text-center mb-4">
-        English to Yoruba Speech
-      </h1>
-      <textarea
-        id="textInput"
-        class="w-full p-2 border rounded-md mb-4"
-        rows="4"
-        placeholder="Enter English text"
-      ></textarea>
-      <button
-        id="speakButton"
-        class="w-full bg-blue-500 text-white p-2 rounded-md hover:bg-blue-600"
+  <body
+    class="bg-gradient-to-br from-blue-200 via-green-100 to-yellow-100 flex items-center justify-center min-h-screen p-4"
+  >
+    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 card-hover">
+      <h1
+        class="text-3xl font-extrabold text-center text-gray-900 mb-6 flex items-center justify-center"
       >
-        Speak
-      </button>
-      <p id="status" class="text-center text-sm text-gray-600 mt-4"></p>
+        <i class="fas fa-volume-up text-blue-600 mr-3"></i> Speak Yoruba
+      </h1>
+      <div class="relative mb-6">
+        <textarea
+          id="textInput"
+          class="w-full p-4 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-blue-500 resize-none text-lg"
+          rows="3"
+          placeholder="Say or type English"
+        ></textarea>
+        <button
+          id="micButton"
+          class="absolute right-3 bottom-3 text-red-600 hover:text-red-700"
+          title="Speak English"
+        >
+          <i class="fas fa-microphone text-2xl"></i>
+        </button>
+      </div>
+      <div class="flex space-x-4">
+        <button
+          id="playButton"
+          class="flex-1 bg-blue-600 text-white p-4 rounded-xl hover:bg-blue-700 flex items-center justify-center text-lg font-semibold"
+        >
+          <i class="fas fa-play mr-2"></i> Play
+        </button>
+        <button
+          id="stopButton"
+          class="flex-1 bg-red-600 text-white p-4 rounded-xl hover:bg-red-700 flex items-center justify-center text-lg font-semibold"
+          disabled
+        >
+          <i class="fas fa-stop mr-2"></i> Stop
+        </button>
+      </div>
+      <p id="status" class="text-center text-sm text-gray-600 mt-6"></p>
     </div>
 
     <script>
       const textInput = document.getElementById("textInput");
-      const speakButton = document.getElementById("speakButton");
+      const playButton = document.getElementById("playButton");
+      const stopButton = document.getElementById("stopButton");
+      const micButton = document.getElementById("micButton");
       const status = document.getElementById("status");
+      let currentAudio = null;
 
-      async function translateText(text) {
-        const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(
-          text
-        )}&langpair=en|yo`;
+      // Play welcome message (using Web Speech API for client-side audio)
+      if ("speechSynthesis" in window) {
+        const welcome = new SpeechSynthesisUtterance(
+          "Welcome! Say or type English, then tap Play."
+        );
+        welcome.lang = "en-US";
+        speechSynthesis.speak(welcome);
+      }
+
+      // Fetch Yoruba speech from backend
+      async function getYorubaSpeech(text) {
+        status.textContent = "Processing...";
+        playButton.disabled = true;
+        playButton.classList.add("bg-gray-400", "cursor-not-allowed");
+        stopButton.disabled = false;
+        stopButton.classList.remove("bg-gray-400", "cursor-not-allowed");
+
         try {
-          const response = await fetch(url);
+          const response = await fetch(
+            "https://your-app.onrender.com/synthesize",
+            {
+              // Replace with your Render URL
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ text }),
+            }
+          );
+          if (!response.ok)
+            throw new Error(`Server error: ${response.statusText}`);
           const data = await response.json();
-          return data.responseData.translatedText || text;
+          if (data.audioUrl) {
+            currentAudio = new Audio(data.audioUrl);
+            currentAudio.play();
+            status.textContent = "Speaking Yoruba...";
+            playButton.classList.add("pulse-animation");
+            currentAudio.onended = () => {
+              status.textContent = "Finished speaking.";
+              resetButtons();
+            };
+          } else {
+            throw new Error("No audio returned.");
+          }
         } catch (error) {
-          status.textContent = "Translation failed. Using original text.";
-          console.error(error);
-          return text;
+          status.textContent = `Error: ${error.message}`;
+          if ("speechSynthesis" in window) {
+            const errorMsg = new SpeechSynthesisUtterance(
+              "Something went wrong. Try again."
+            );
+            speechSynthesis.speak(errorMsg);
+          }
+          resetButtons();
         }
       }
 
-      if ("speechSynthesis" in window) {
-        let voices = [];
-        function loadVoices() {
-          voices = speechSynthesis.getVoices();
-          const yorubaVoice = voices.find(
-            (voice) => voice.lang === "yo-NG" || voice.lang === "yo"
-          );
-          status.textContent = yorubaVoice
-            ? `Using voice: ${yorubaVoice.name}`
-            : "No Yoruba voice available. Using default voice.";
-        }
-        speechSynthesis.onvoiceschanged = loadVoices;
-        loadVoices();
+      // Reset button states
+      function resetButtons() {
+        playButton.disabled = false;
+        playButton.classList.remove(
+          "bg-gray-400",
+          "cursor-not-allowed",
+          "pulse-animation"
+        );
+        stopButton.disabled = true;
+        stopButton.classList.add("bg-gray-400", "cursor-not-allowed");
+        currentAudio = null;
+      }
 
-        speakButton.addEventListener("click", async () => {
-          const text = textInput.value.trim();
-          if (!text) {
-            status.textContent = "Please enter some text.";
-            return;
+      // Play button
+      playButton.addEventListener("click", () => {
+        const text = textInput.value.trim();
+        if (!text) {
+          status.textContent = "Say or type something!";
+          if ("speechSynthesis" in window) {
+            const warn = new SpeechSynthesisUtterance(
+              "Please say or type something."
+            );
+            speechSynthesis.speak(warn);
           }
-          status.textContent = "Translating...";
-          const yorubaText = await translateText(text);
-          const utterance = new SpeechSynthesisUtterance(yorubaText);
-          const yorubaVoice = voices.find(
-            (voice) => voice.lang === "yo-NG" || voice.lang === "yo"
-          );
-          if (yorubaVoice) utterance.voice = yorubaVoice;
-          utterance.lang = "yo-NG";
-          speechSynthesis.speak(utterance);
-          status.textContent = "Speaking...";
+          return;
+        }
+        getYorubaSpeech(text);
+      });
+
+      // Stop button
+      stopButton.addEventListener("click", () => {
+        if (currentAudio) {
+          currentAudio.pause();
+          currentAudio.currentTime = 0;
+          status.textContent = "Stopped.";
+          resetButtons();
+        }
+      });
+
+      // Voice input (Web Speech Recognition)
+      if (
+        "SpeechRecognition" in window ||
+        "webkitSpeechRecognition" in window
+      ) {
+        const Recognition =
+          window.SpeechRecognition || window.webkitSpeechRecognition;
+        const recognition = new Recognition();
+        recognition.lang = "en-US";
+        recognition.interimResults = false;
+
+        micButton.addEventListener("click", () => {
+          recognition.start();
+          micButton.classList.add("animate-pulse", "text-red-700");
+          status.textContent = "Listening...";
         });
+
+        recognition.onresult = (event) => {
+          const text = event.results[0][0].transcript;
+          textInput.value = text;
+          status.textContent = "Heard: " + text;
+          micButton.classList.remove("animate-pulse", "text-red-700");
+        };
+
+        recognition.onerror = () => {
+          status.textContent = "Could not hear you. Try again.";
+          micButton.classList.remove("animate-pulse", "text-red-700");
+          if ("speechSynthesis" in window) {
+            const error = new SpeechSynthesisUtterance(
+              "Could not hear you. Try again."
+            );
+            speechSynthesis.speak(error);
+          }
+        };
+
+        recognition.onend = () => {
+          micButton.classList.remove("animate-pulse", "text-red-700");
+        };
       } else {
-        status.textContent = "Web Speech API not supported in your browser.";
-        speakButton.disabled = true;
-        speakButton.classList.add("bg-gray-400", "cursor-not-allowed");
+        micButton.disabled = true;
+        micButton.classList.add("text-gray-400", "cursor-not-allowed");
+        status.textContent = "Microphone not supported. Type instead.";
       }
     </script>
   </body>
